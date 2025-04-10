@@ -33,14 +33,28 @@ def parse_args():
 def load_config(config_path: str):
     """Load configuration from JSON file"""
     try:
+        logging.debug(f"Attempting to load config from: {os.path.abspath(config_path)}")
         with open(config_path) as f:
             config = json.load(f)
+        
+        # Validate required fields
+        required_keys = ['radarr_url', 'radarr_api_key']
+        for key in required_keys:
+            if key not in config:
+                raise ValueError(f"Missing required config key: {key}")
         
         # Create output directory if needed
         output_dir = config.get('output_directory', 'results')
         os.makedirs(output_dir, exist_ok=True)
         
+        logging.debug("Config loaded successfully")
         return config
+    except json.JSONDecodeError as e:
+        logging.error(f"Invalid JSON in config file: {str(e)}")
+        sys.exit(1)
+    except FileNotFoundError:
+        logging.error(f"Config file not found at: {os.path.abspath(config_path)}")
+        sys.exit(1)
     except Exception as e:
         logging.error(f"Failed to load config: {str(e)}")
         sys.exit(1)
