@@ -1,6 +1,7 @@
 {
     "radarr_url": "http://localhost:7878",
     "radarr_api_key": "",
+    "score_threshold": 300,
     "log_level": "INFO",
     "output_directory": "results"
 }

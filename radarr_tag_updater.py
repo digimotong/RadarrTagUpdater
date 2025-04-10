@@ -43,6 +43,16 @@ def load_config(config_path: str):
         logging.error(f"Failed to load config: {str(e)}")
         sys.exit(1)
 
+def get_score_tag(score: int, threshold: int) -> str:
+    """Determine the appropriate score tag based on customFormatScore"""
+    if score is None:
+        return "no_score"
+    if score < 0:
+        return "negative_score"
+    if score > threshold:
+        return "positive_score"
+    return "no_score"
+
 VERSION = "1.0.0"
 
 def main():
@@ -77,17 +87,38 @@ def main():
         
         # Fetch data
         movies = api.get_movies()
-        custom_formats = api.get_custom_formats()
         
         if args.test:
             movies = movies[:5]
             logging.info("TEST MODE: Processing first 5 movies only")
 
-        # Output raw movie data for testing
-        raw_movies_file = os.path.join(OUTPUT_DIR, 'raw_movies.json')
-        with open(raw_movies_file, 'w') as f:
-            json.dump(movies, f, indent=2)
-        logging.info(f"Saved raw movie data to {raw_movies_file}")
+        # Process and update movie tags
+        score_threshold = config.get('score_threshold', 100)
+        score_tags = {'negative_score', 'positive_score', 'no_score'}
+        updated_count = 0
+
+        for movie in movies:
+            current_tags = set(movie.get('tags', []))
+            
+            # Remove any existing score tags
+            new_tags = [t for t in current_tags if t not in score_tags]
+            
+            # Get score and determine new tag
+            movie_file = movie.get('movieFile', {})
+            score = movie_file.get('customFormatScore')
+            new_tag = get_score_tag(score, score_threshold)
+            new_tags.append(new_tag)
+            
+            # Only update if tags changed
+            if set(new_tags) != current_tags:
+                movie['tags'] = new_tags
+                if api.update_movie(movie['id'], movie):
+                    updated_count += 1
+                    logging.debug(f"Updated tags for {movie['title']}")
+                else:
+                    logging.warning(f"Failed to update {movie['title']}")
+
+        logging.info(f"Processing complete. Updated {updated_count}/{len(movies)} movies")
         
     except Exception as e:
         logging.error(f"Script failed: {str(e)}")
@@ -115,6 +146,17 @@ class RadarrAPI:
         except RequestException as e:
             logging.error(f"Failed to fetch movies: {str(e)}")
             raise
+
+    def update_movie(self, movie_id: int, movie_data: Dict) -> bool:
+        """Update a movie in Radarr"""
+        endpoint = f"{self.base_url}/api/v3/movie/{movie_id}"
+        try:
+            response = self.session.put(endpoint, json=movie_data)
+            response.raise_for_status()
+            return True
+        except RequestException as e:
+            logging.error(f"Failed to update movie {movie_id}: {str(e)}")
+            return False
 
 def setup_logging(log_level):
     """Configure logging for cron job"""
