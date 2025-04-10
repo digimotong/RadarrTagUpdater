@@ -92,11 +92,13 @@ def main():
         # Create tag name to ID mapping
         tag_map = {tag['label']: tag['id'] for tag in all_tags}
         
-        # Ensure our score tags exist, create if missing
+        # Ensure our required tags exist, create if missing
         score_tags = {
             'negative_score': '#ff0000',  # Red
             'positive_score': '#00ff00',  # Green
-            'no_score': '#808080'         # Gray
+            'no_score': '#808080',        # Gray
+            'motong': '#800080',         # Purple
+            '4k': '#0000ff'              # Blue
         }
         for tag, color in score_tags.items():
             if tag not in tag_map:
@@ -134,6 +136,22 @@ def main():
             new_tag_name = get_score_tag(score, score_threshold)
             logging.debug(f"Movie: {movie['title']} - Score: {score} - Tag: {new_tag_name}")
             new_tag_ids.append(tag_map[new_tag_name])
+            
+            # Add motong tag if release group matches
+            if movie.get('movieFileId'):
+                try:
+                    movie_file = api.get_movie_file(movie['movieFileId'])
+                    if movie_file.get('releaseGroup', '').lower() == 'motong':
+                        new_tag_ids.append(tag_map['motong'])
+                        logging.debug(f"Added motong tag for {movie['title']}")
+                    
+                    # Add 4k tag if resolution is 2160p
+                    quality = movie_file.get('quality', {})
+                    if quality.get('quality', {}).get('resolution') == 2160:
+                        new_tag_ids.append(tag_map['4k'])
+                        logging.debug(f"Added 4k tag for {movie['title']}")
+                except RequestException:
+                    pass  # Already logged earlier
             
             # Only update if tags changed
             if set(new_tag_ids) != current_tags:
