@@ -6,7 +6,7 @@ Automatically updates movie tags in Radarr based on custom format scores and oth
 
 - **Score-based tagging**:
   - `negative_score` when customFormatScore < 0
-  - `positive_score` when customFormatScore > threshold (default: 100)
+  - `positive_score` when customFormatScore > threshold (default: 300)
   - `no_score` when score is None or between 0-threshold
 
 - **Release group tagging**:
