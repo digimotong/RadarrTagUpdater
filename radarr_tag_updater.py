@@ -85,8 +85,24 @@ def main():
         # Initialize API client
         api = RadarrAPI(RADARR_URL, RADARR_API_KEY)
         
-        # Fetch data
+        # Fetch required data
         movies = api.get_movies()
+        all_tags = api.get_tags()
+        
+        # Create tag name to ID mapping
+        tag_map = {tag['label']: tag['id'] for tag in all_tags}
+        
+        # Ensure our score tags exist, create if missing
+        score_tags = {
+            'negative_score': '#ff0000',  # Red
+            'positive_score': '#00ff00',  # Green
+            'no_score': '#808080'         # Gray
+        }
+        for tag, color in score_tags.items():
+            if tag not in tag_map:
+                logging.info(f"Creating missing tag: {tag}")
+                new_tag = api.create_tag(tag, color)
+                tag_map[tag] = new_tag['id']
         
         if args.test:
             movies = movies[:5]
@@ -94,25 +110,28 @@ def main():
 
         # Process and update movie tags
         score_threshold = config.get('score_threshold', 100)
-        score_tags = {'negative_score', 'positive_score', 'no_score'}
         updated_count = 0
 
         for movie in movies:
+            # Create a copy of the movie data to preserve all fields
+            movie_update = movie.copy()
             current_tags = set(movie.get('tags', []))
             
-            # Remove any existing score tags
-            new_tags = [t for t in current_tags if t not in score_tags]
+            # Remove any existing score tags (by ID)
+            new_tag_ids = [tag_id for tag_id in current_tags 
+                         if not any(tag['id'] == tag_id and tag['label'] in score_tags 
+                                  for tag in all_tags)]
             
             # Get score and determine new tag
             movie_file = movie.get('movieFile', {})
             score = movie_file.get('customFormatScore')
-            new_tag = get_score_tag(score, score_threshold)
-            new_tags.append(new_tag)
+            new_tag_name = get_score_tag(score, score_threshold)
+            new_tag_ids.append(tag_map[new_tag_name])
             
             # Only update if tags changed
-            if set(new_tags) != current_tags:
-                movie['tags'] = new_tags
-                if api.update_movie(movie['id'], movie):
+            if set(new_tag_ids) != current_tags:
+                movie_update['tags'] = new_tag_ids
+                if api.update_movie(movie['id'], movie_update):
                     updated_count += 1
                     logging.debug(f"Updated tags for {movie['title']}")
                 else:
@@ -147,6 +166,31 @@ class RadarrAPI:
             logging.error(f"Failed to fetch movies: {str(e)}")
             raise
 
+    def get_tags(self) -> List[Dict]:
+        """Fetch all tags from Radarr"""
+        endpoint = f"{self.base_url}/api/v3/tag"
+        try:
+            response = self.session.get(endpoint)
+            response.raise_for_status()
+            return response.json()
+        except RequestException as e:
+            logging.error(f"Failed to fetch tags: {str(e)}")
+            raise
+
+    def create_tag(self, label: str, color: str = "#808080") -> Dict:
+        """Create a new tag in Radarr"""
+        endpoint = f"{self.base_url}/api/v3/tag"
+        try:
+            response = self.session.post(endpoint, json={
+                'label': label,
+                'color': color
+            })
+            response.raise_for_status()
+            return response.json()
+        except RequestException as e:
+            logging.error(f"Failed to create tag '{label}': {str(e)}")
+            raise
+
     def update_movie(self, movie_id: int, movie_data: Dict) -> bool:
         """Update a movie in Radarr"""
         endpoint = f"{self.base_url}/api/v3/movie/{movie_id}"
@@ -155,7 +199,7 @@ class RadarrAPI:
             response.raise_for_status()
             return True
         except RequestException as e:
-            logging.error(f"Failed to update movie {movie_id}: {str(e)}")
+            logging.error(f"Failed to update movie {movie_id}. Response: {response.text if 'response' in locals() else ''}. Error: {str(e)}")
             return False
 
 def setup_logging(log_level):
