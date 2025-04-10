@@ -1,70 +1,108 @@
-# Radarr Custom Format Calculator
+# Radarr Tag Updater
 
-A Python script to calculate and export custom format scores for all movies in Radarr.
+Automatically updates movie tags in Radarr based on custom format scores and other criteria.
 
 ## Features
 
-- Fetches movies and custom formats from Radarr API
-- Calculates scores matching Radarr's frontend logic
-- Outputs results in JSON or CSV format
-- Supports cron job scheduling
-- Test mode for development/debugging
-- Configurable logging levels
+- **Score-based tagging**:
+  - `negative_score` when customFormatScore < 0
+  - `positive_score` when customFormatScore > threshold (default: 100)
+  - `no_score` when score is None or between 0-threshold
+
+- **Release group tagging**:
+  - Adds `motong` tag when release group is "motong"
+
+- **Resolution tagging**:
+  - Adds `4k` tag when resolution is 2160p
 
 ## Requirements
 
 - Python 3.6+
-- requests library
+- Radarr v3+
+- API key with write permissions
 
 ## Installation
 
 1. Clone this repository
-2. Install dependencies:
+2. Install requirements:
    ```bash
    pip install -r requirements.txt
    ```
-3. Configure the `config.json` file with your Radarr details
 
-## Configuration
-
-Edit `config.json` with your settings:
-```json
-{
-    "radarr_url": "http://localhost:7878",
-    "radarr_api_key": "your_api_key_here",
-    "output_format": "json",
-    "log_level": "INFO",
-    "output_directory": "results"
-}
-```
+3. Copy `config.example.json` to `config.json` and edit:
+   ```json
+   {
+     "radarr_url": "http://your-radarr:7878",
+     "radarr_api_key": "your-api-key",
+     "score_threshold": 100,
+     "log_level": "INFO"
+   }
+   ```
 
 ## Usage
 
-Basic usage:
 ```bash
-python radarr_format_calculator.py
+python radarr_tag_updater.py [options]
 ```
 
-Command line options:
+Options:
+- `--config`: Specify alternate config file (default: config.json)
+- `--test`: Test mode (only processes first 5 movies)
+- `--log-level`: Override log level (DEBUG, INFO, WARNING, ERROR)
+
+## Automation
+
+### Cron Job Setup
+
+To run automatically on a schedule:
+
+1. Find your Python path:
+   ```bash
+   which python3
+   ```
+
+2. Edit crontab:
+   ```bash
+   crontab -e
+   ```
+
+3. Add entries like:
+   ```bash
+   # Daily at 2am
+   0 2 * * * /full/path/to/python3 /path/to/radarr_tag_updater.py >> /path/to/radarr_tag_updater.log 2>&1
+
+   # Weekly on Sundays at 3am
+   0 3 * * 0 /full/path/to/python3 /path/to/radarr_tag_updater.py --log-level INFO >> /path/to/radarr_tag_updater.log 2>&1
+   ```
+
+4. For log rotation, add to /etc/logrotate.d/:
+   ```bash
+   /path/to/radarr_tag_updater.log {
+       weekly
+       rotate 4
+       compress
+       missingok
+       notifempty
+   }
+   ```
+
+## Tags
+
+The script will automatically create these tags if missing:
+- `negative_score` (red)
+- `positive_score` (green) 
+- `no_score` (gray)
+- `motong` (purple)
+- `4k` (blue)
+
+## Logging
+
+Detailed logs are written to `radarr_tag_updater.log`
+
+## Example Output
+
 ```
---config      Path to config file (default: config.json)
---test        Run in test mode (only process first 5 movies)
---format      Override output format (json/csv)
---log-level   Override log level (DEBUG/INFO/WARNING/ERROR)
---version     Show version and exit
-```
-
-## Cron Job Setup
-
-Example cron entry to run daily at 2am:
-```bash
-0 2 * * * /usr/bin/python3 /path/to/radarr_format_calculator.py
-```
-
-## Output
-
-Results are saved to:
-- `results/radarr_format_scores.json` (default)
-- Or `results/radarr_format_scores.csv` if CSV format selected
-
-Logs are written to `radarr_format_calculator.log`
+2025-04-10 09:30:00 - INFO - Starting Radarr Tag Updater v1.0.0
+2025-04-10 09:30:02 - DEBUG - Movie: The Matrix - Score: 150 - Tag: positive_score
+2025-04-10 09:30:02 - DEBUG - Added 4k tag for The Matrix
+2025-04-10 09:30:05 - INFO - Processing complete. Updated 42/100 movies
