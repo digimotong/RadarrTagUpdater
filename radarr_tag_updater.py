@@ -203,12 +203,14 @@ def main():
                     updated_count += 1
                     logging.debug(f"Updated tags for {movie['title']}")
                 
-                # Record update attempt
+                # Record update attempt (using tag names instead of IDs)
                 all_updates.append({
                     'id': movie['id'],
                     'title': movie['title'],
-                    'old_tags': current_tags,
-                    'new_tags': new_tag_ids,
+                    'old_tags': [next((tag['label'] for tag in all_tags if tag['id'] == tag_id), tag_id)
+                               for tag_id in current_tags],
+                    'new_tags': [next((tag['label'] for tag in all_tags if tag['id'] == tag_id), tag_id)
+                               for tag_id in new_tag_ids],
                     'score': score,
                     'threshold': score_threshold,
                     'success': success
