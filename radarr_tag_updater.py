@@ -122,10 +122,17 @@ def main():
                          if not any(tag['id'] == tag_id and tag['label'] in score_tags 
                                   for tag in all_tags)]
             
-            # Get score and determine new tag
-            movie_file = movie.get('movieFile', {})
-            score = movie_file.get('customFormatScore')
+            # Get movie file and score
+            score = None
+            if movie.get('movieFileId'):
+                try:
+                    movie_file = api.get_movie_file(movie['movieFileId'])
+                    score = movie_file.get('customFormatScore')
+                except RequestException:
+                    logging.warning(f"Failed to get movie file for {movie['title']}")
+            
             new_tag_name = get_score_tag(score, score_threshold)
+            logging.debug(f"Movie: {movie['title']} - Score: {score} - Tag: {new_tag_name}")
             new_tag_ids.append(tag_map[new_tag_name])
             
             # Only update if tags changed
@@ -189,6 +196,17 @@ class RadarrAPI:
             return response.json()
         except RequestException as e:
             logging.error(f"Failed to create tag '{label}': {str(e)}")
+            raise
+
+    def get_movie_file(self, movie_file_id: int) -> Dict:
+        """Fetch movie file details from Radarr"""
+        endpoint = f"{self.base_url}/api/v3/moviefile/{movie_file_id}"
+        try:
+            response = self.session.get(endpoint)
+            response.raise_for_status()
+            return response.json()
+        except RequestException as e:
+            logging.error(f"Failed to fetch movie file {movie_file_id}: {str(e)}")
             raise
 
     def update_movie(self, movie_id: int, movie_data: Dict) -> bool:
