@@ -1,7 +1,0 @@
-{
-    "radarr_url": "http://localhost:7878",
-    "radarr_api_key": "",
-    "score_threshold": 100,
-    "log_level": "INFO",
-    "output_directory": "results"
-}

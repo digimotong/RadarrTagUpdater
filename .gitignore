@@ -2,7 +2,11 @@
 */
 
 !.gitignore
+!.github
 !README.md
-!config.example.json
-!radarr_tag_updater.py
+
+!.env.example
+!radarr-tagger
+!radarr-tagger/*
 !requirements.txt
+!Dockerfile
