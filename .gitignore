@@ -1,3 +1,8 @@
-config.json
-results/*
-radarr_tag_updater.log
+*
+*/
+
+!.gitignore
+!README.md
+!config.example.json
+!radarr_tag_updater.py
+!requirements.txt
