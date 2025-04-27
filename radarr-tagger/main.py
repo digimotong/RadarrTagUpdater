@@ -112,7 +112,8 @@ def get_config_from_env():
 
     # Validate required fields
     if not config['radarr_url'] or not config['radarr_api_key']:
-        raise ValueError("Missing required environment variables: RADARR_URL and RADARR_API_KEY must be set")
+        raise ValueError("Missing required environment variables: " 
+                       "RADARR_URL and RADARR_API_KEY must be set")
 
     logging.debug("Config loaded from environment successfully")
     return config
