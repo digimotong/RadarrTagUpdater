@@ -66,94 +66,100 @@ def main():
     RADARR_API_KEY = config['radarr_api_key']
     LOG_LEVEL = config['log_level']
     SCORE_THRESHOLD = config['score_threshold']
+    INTERVAL_MINUTES = int(os.getenv('INTERVAL_MINUTES', '20'))
 
     setup_logging(LOG_LEVEL)
     logging.info("Starting Radarr Tag Updater v%s", VERSION)
+    logging.info("Running every %d minutes", INTERVAL_MINUTES)
     
-    try:
-        # Initialize API client
-        api = RadarrAPI(RADARR_URL, RADARR_API_KEY)
-        
-        # Fetch required data
-        movies = api.get_movies()
-        all_tags = api.get_tags()
-        
-        # Create tag name to ID mapping
-        tag_map = {tag['label']: tag['id'] for tag in all_tags}
-        
-        # Ensure our required tags exist, create if missing
-        score_tags = {
-            'negative_score': '#ff0000',  # Red
-            'positive_score': '#00ff00',  # Green
-            'no_score': '#808080',        # Gray
-            'motong': '#800080',         # Purple
-            '4k': '#0000ff'              # Blue
-        }
-        for tag, color in score_tags.items():
-            if tag not in tag_map:
-                logging.info(f"Creating missing tag: {tag}")
-                new_tag = api.create_tag(tag, color)
-                tag_map[tag] = new_tag['id']
-        
-        if args.test:
-            movies = movies[:5]
-            logging.info("TEST MODE: Processing first 5 movies only")
+    while True:
+        try:
+            # Initialize API client
+            api = RadarrAPI(RADARR_URL, RADARR_API_KEY)
+            
+            # Fetch required data
+            movies = api.get_movies()
+            all_tags = api.get_tags()
+            
+            # Create tag name to ID mapping
+            tag_map = {tag['label']: tag['id'] for tag in all_tags}
+            
+            # Ensure our required tags exist, create if missing
+            score_tags = {
+                'negative_score': '#ff0000',  # Red
+                'positive_score': '#00ff00',  # Green
+                'no_score': '#808080',        # Gray
+                'motong': '#800080',         # Purple
+                '4k': '#0000ff'              # Blue
+            }
+            for tag, color in score_tags.items():
+                if tag not in tag_map:
+                    logging.info(f"Creating missing tag: {tag}")
+                    new_tag = api.create_tag(tag, color)
+                    tag_map[tag] = new_tag['id']
+            
+            if args.test:
+                movies = movies[:5]
+                logging.info("TEST MODE: Processing first 5 movies only")
 
-        # Process and update movie tags
-        updated_count = 0
+            # Process and update movie tags
+            updated_count = 0
 
-        for movie in movies:
-            # Create a copy of the movie data to preserve all fields
-            movie_update = movie.copy()
-            current_tags = set(movie.get('tags', []))
-            
-            # Remove any existing score tags (by ID)
-            new_tag_ids = [tag_id for tag_id in current_tags 
-                         if not any(tag['id'] == tag_id and tag['label'] in score_tags 
-                                  for tag in all_tags)]
-            
-            # Get movie file and score
-            score = None
-            if movie.get('movieFileId'):
-                try:
-                    movie_file = api.get_movie_file(movie['movieFileId'])
-                    score = movie_file.get('customFormatScore')
-                except RequestException:
-                    logging.warning(f"Failed to get movie file for {movie['title']}")
-            
-            new_tag_name = get_score_tag(score, SCORE_THRESHOLD)
-            logging.debug(f"Movie: {movie['title']} - Score: {score} - Tag: {new_tag_name}")
-            new_tag_ids.append(tag_map[new_tag_name])
-            
-            # Add motong tag if release group matches
-            if movie.get('movieFileId'):
-                try:
-                    movie_file = api.get_movie_file(movie['movieFileId'])
-                    if movie_file.get('releaseGroup', '').lower() == 'motong':
-                        new_tag_ids.append(tag_map['motong'])
-                        logging.debug(f"Added motong tag for {movie['title']}")
-                    
-                    # Add 4k tag if resolution is 2160p
-                    quality = movie_file.get('quality', {})
-                    if quality.get('quality', {}).get('resolution') == 2160:
-                        new_tag_ids.append(tag_map['4k'])
-                        logging.debug(f"Added 4k tag for {movie['title']}")
-                except RequestException:
-                    pass  # Already logged earlier
-            
-            # Only update if tags changed
-            if set(new_tag_ids) != current_tags:
-                movie_update['tags'] = new_tag_ids
-                success = api.update_movie(movie['id'], movie_update)
-                if success:
-                    updated_count += 1
-                    logging.debug(f"Updated tags for {movie['title']}")
+            for movie in movies:
+                # Create a copy of the movie data to preserve all fields
+                movie_update = movie.copy()
+                current_tags = set(movie.get('tags', []))
+                
+                # Remove any existing score tags (by ID)
+                new_tag_ids = [tag_id for tag_id in current_tags 
+                             if not any(tag['id'] == tag_id and tag['label'] in score_tags 
+                                      for tag in all_tags)]
+                
+                # Get movie file and score
+                score = None
+                if movie.get('movieFileId'):
+                    try:
+                        movie_file = api.get_movie_file(movie['movieFileId'])
+                        score = movie_file.get('customFormatScore')
+                    except RequestException:
+                        logging.warning(f"Failed to get movie file for {movie['title']}")
+                
+                new_tag_name = get_score_tag(score, SCORE_THRESHOLD)
+                logging.debug(f"Movie: {movie['title']} - Score: {score} - Tag: {new_tag_name}")
+                new_tag_ids.append(tag_map[new_tag_name])
+                
+                # Add motong tag if release group matches
+                if movie.get('movieFileId'):
+                    try:
+                        movie_file = api.get_movie_file(movie['movieFileId'])
+                        if movie_file.get('releaseGroup', '').lower() == 'motong':
+                            new_tag_ids.append(tag_map['motong'])
+                            logging.debug(f"Added motong tag for {movie['title']}")
+                        
+                        # Add 4k tag if resolution is 2160p
+                        quality = movie_file.get('quality', {})
+                        if quality.get('quality', {}).get('resolution') == 2160:
+                            new_tag_ids.append(tag_map['4k'])
+                            logging.debug(f"Added 4k tag for {movie['title']}")
+                    except RequestException:
+                        pass  # Already logged earlier
+                
+                # Only update if tags changed
+                if set(new_tag_ids) != current_tags:
+                    movie_update['tags'] = new_tag_ids
+                    success = api.update_movie(movie['id'], movie_update)
+                    if success:
+                        updated_count += 1
+                        logging.debug(f"Updated tags for {movie['title']}")
 
-        logging.info(f"Processing complete. Updated {updated_count}/{len(movies)} movies")
-        
-    except Exception as e:
-        logging.error(f"Script failed: {str(e)}")
-        sys.exit(1)
+            logging.info(f"Processing complete. Updated {updated_count}/{len(movies)} movies")
+            logging.info(f"Next run in {INTERVAL_MINUTES} minutes")
+            time.sleep(INTERVAL_MINUTES * 60)
+            
+        except Exception as e:
+            logging.error(f"Script failed: {str(e)}")
+            logging.info("Retrying in 5 minutes")
+            time.sleep(300)  # Retry after 5 minutes on error
 
 class RadarrAPI:
     """Client for Radarr API interactions"""
