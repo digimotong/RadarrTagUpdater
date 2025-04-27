@@ -31,7 +31,7 @@ services:
       RADARR_URL: http://radarr:7878  # Radarr instance URL
       RADARR_API_KEY: your-api-key    # Radarr API key (required)
       LOG_LEVEL: INFO                 # DEBUG, INFO, WARNING, ERROR
-      SCORE_THRESHOLD: 100           # Threshold for positive_score
+      SCORE_THRESHOLD: 100            # Threshold for positive_score
       INTERVAL_MINUTES: 20            # Minutes between runs
       MOTONG: true                    # Enable motong tagging
 ```
