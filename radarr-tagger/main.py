@@ -30,11 +30,11 @@ def get_config_from_env():
         'log_level': os.getenv('LOG_LEVEL', 'INFO'),
         'score_threshold': int(os.getenv('SCORE_THRESHOLD', '100'))
     }
-    
+
     # Validate required fields
     if not config['radarr_url'] or not config['radarr_api_key']:
         raise ValueError("Missing required environment variables: RADARR_URL and RADARR_API_KEY must be set")
-    
+
     logging.debug("Config loaded from environment successfully")
     return config
 
@@ -50,6 +50,80 @@ def get_score_tag(score: int, threshold: int) -> str:
 
 VERSION = "1.0.0"
 
+def process_movie_tags(api: RadarrAPI, movie: Dict, tag_map: Dict, score_tags: Dict, score_threshold: int) -> bool:
+    """Process and update tags for a single movie"""
+    movie_update = movie.copy()
+    current_tags = set(movie.get('tags', []))
+    
+    # Remove any existing score tags (by ID)
+    new_tag_ids = [tag_id for tag_id in current_tags
+                 if not any(tag['id'] == tag_id and tag['label'] in score_tags
+                          for tag in api.get_tags())]
+    
+    # Get movie file and score
+    score = None
+    if movie.get('movieFileId'):
+        try:
+            movie_file = api.get_movie_file(movie['movieFileId'])
+            score = movie_file.get('customFormatScore')
+        except RequestException:
+            logging.warning("Failed to get movie file for %s", movie['title'])
+    
+    new_tag_name = get_score_tag(score, score_threshold)
+    logging.debug("Movie: %s - Score: %s - Tag: %s", 
+                movie['title'], score, new_tag_name)
+    new_tag_ids.append(tag_map[new_tag_name])
+    
+    # Add special tags if needed
+    new_tag_ids = add_special_tags(api, movie, tag_map, new_tag_ids)
+    
+    # Only update if tags changed
+    if set(new_tag_ids) != current_tags:
+        movie_update['tags'] = new_tag_ids
+        return api.update_movie(movie['id'], movie_update)
+    return False
+
+def add_special_tags(api: RadarrAPI, movie: Dict, tag_map: Dict, tag_ids: List[int]) -> List[int]:
+    """Add special tags (motong, 4k) if conditions are met"""
+    if not movie.get('movieFileId'):
+        return tag_ids
+        
+    try:
+        movie_file = api.get_movie_file(movie['movieFileId'])
+        if movie_file.get('releaseGroup', '').lower() == 'motong':
+            tag_ids.append(tag_map['motong'])
+            logging.debug("Added motong tag for %s", movie['title'])
+        
+        quality = movie_file.get('quality', {})
+        if quality.get('quality', {}).get('resolution') == 2160:
+            tag_ids.append(tag_map['4k'])
+            logging.debug("Added 4k tag for %s", movie['title'])
+    except RequestException:
+        pass
+        
+    return tag_ids
+
+def ensure_required_tags(api: RadarrAPI) -> Dict:
+    """Ensure required tags exist and return tag name to ID mapping"""
+    all_tags = api.get_tags()
+    tag_map = {tag['label']: tag['id'] for tag in all_tags}
+    
+    score_tags = {
+        'negative_score': '#ff0000',  # Red
+        'positive_score': '#00ff00',  # Green
+        'no_score': '#808080',        # Gray
+        'motong': '#800080',         # Purple
+        '4k': '#0000ff'              # Blue
+    }
+    
+    for tag, color in score_tags.items():
+        if tag not in tag_map:
+            logging.info("Creating missing tag: %s", tag)
+            new_tag = api.create_tag(tag, color)
+            tag_map[tag] = new_tag['id']
+    
+    return tag_map
+
 def main():
     """Main execution flow"""
     args = parse_args()
@@ -58,100 +132,26 @@ def main():
         print(f"Radarr Tag Updater v{VERSION}")
         sys.exit(0)
     
-    # Load configuration from environment
     config = get_config_from_env()
-    
-    # Set global config
-    radarr_url = config['radarr_url']
-    radarr_api_key = config['radarr_api_key']
-    log_level = config['log_level']
-    score_threshold = config['score_threshold']
-    interval_minutes = int(os.getenv('INTERVAL_MINUTES', '20'))
-
-    setup_logging(log_level)
+    setup_logging(config['log_level'])
     logging.info("Starting Radarr Tag Updater v%s", VERSION)
-    logging.info("Running every %d minutes", interval_minutes)
+    
+    api = RadarrAPI(config['radarr_url'], config['radarr_api_key'])
+    interval_minutes = int(os.getenv('INTERVAL_MINUTES', '20'))
     
     while True:
         try:
-            # Initialize API client
-            api = RadarrAPI(radarr_url, radarr_api_key)
-            
-            # Fetch required data
+            tag_map = ensure_required_tags(api)
             movies = api.get_movies()
-            all_tags = api.get_tags()
-            
-            # Create tag name to ID mapping
-            tag_map = {tag['label']: tag['id'] for tag in all_tags}
-            
-            # Ensure our required tags exist, create if missing
-            score_tags = {
-                'negative_score': '#ff0000',  # Red
-                'positive_score': '#00ff00',  # Green
-                'no_score': '#808080',        # Gray
-                'motong': '#800080',         # Purple
-                '4k': '#0000ff'              # Blue
-            }
-            for tag, color in score_tags.items():
-                if tag not in tag_map:
-                    logging.info("Creating missing tag: %s", tag)
-                    new_tag = api.create_tag(tag, color)
-                    tag_map[tag] = new_tag['id']
             
             if args.test:
                 movies = movies[:5]
                 logging.info("TEST MODE: Processing first 5 movies only")
 
-            # Process and update movie tags
-            updated_count = 0
-
-            for movie in movies:
-                # Create a copy of the movie data to preserve all fields
-                movie_update = movie.copy()
-                current_tags = set(movie.get('tags', []))
-                
-                # Remove any existing score tags (by ID)
-                new_tag_ids = [tag_id for tag_id in current_tags 
-                             if not any(tag['id'] == tag_id and tag['label'] in score_tags 
-                                      for tag in all_tags)]
-                
-                # Get movie file and score
-                score = None
-                if movie.get('movieFileId'):
-                    try:
-                        movie_file = api.get_movie_file(movie['movieFileId'])
-                        score = movie_file.get('customFormatScore')
-                    except RequestException:
-                        logging.warning("Failed to get movie file for %s", movie['title'])
-                
-                new_tag_name = get_score_tag(score, score_threshold)
-                logging.debug("Movie: %s - Score: %s - Tag: %s", 
-                            movie['title'], score, new_tag_name)
-                new_tag_ids.append(tag_map[new_tag_name])
-                
-                # Add motong tag if release group matches
-                if movie.get('movieFileId'):
-                    try:
-                        movie_file = api.get_movie_file(movie['movieFileId'])
-                        if movie_file.get('releaseGroup', '').lower() == 'motong':
-                            new_tag_ids.append(tag_map['motong'])
-                            logging.debug("Added motong tag for %s", movie['title'])
-                        
-                        # Add 4k tag if resolution is 2160p
-                        quality = movie_file.get('quality', {})
-                        if quality.get('quality', {}).get('resolution') == 2160:
-                            new_tag_ids.append(tag_map['4k'])
-                            logging.debug("Added 4k tag for %s", movie['title'])
-                    except RequestException:
-                        pass  # Already logged earlier
-                
-                # Only update if tags changed
-                if set(new_tag_ids) != current_tags:
-                    movie_update['tags'] = new_tag_ids
-                    success = api.update_movie(movie['id'], movie_update)
-                    if success:
-                        updated_count += 1
-                        logging.debug("Updated tags for %s", movie['title'])
+            updated_count = sum(
+                1 for movie in movies 
+                if process_movie_tags(api, movie, tag_map, score_tags, config['score_threshold'])
+            )
 
             logging.info("Processing complete. Updated %s/%s movies", updated_count, len(movies))
             logging.info("Next run in %s minutes", interval_minutes)
@@ -160,7 +160,7 @@ def main():
         except (RequestException, ValueError) as e:
             logging.error("Script failed: %s", str(e))
             logging.info("Retrying in 5 minutes")
-            time.sleep(300)  # Retry after 5 minutes on error
+            time.sleep(300)
 
 class RadarrAPI:
     """Client for Radarr API interactions"""
