@@ -131,7 +131,12 @@ def get_score_tag(score: int, threshold: int) -> str:
 
 VERSION = "1.0.0"
 
-def process_movie_tags(api: RadarrAPI, movie: Dict, tag_map: Dict, score_threshold: int, config: Dict) -> bool:
+def process_movie_tags(
+        api: RadarrAPI,
+        movie: Dict,
+        tag_map: Dict,
+        score_threshold: int,
+        config: Dict) -> bool:
     """Process and update tags for a single movie"""
     movie_update = movie.copy()
     current_tags = set(movie.get('tags', []))
@@ -174,7 +179,12 @@ def process_movie_tags(api: RadarrAPI, movie: Dict, tag_map: Dict, score_thresho
         return api.update_movie(movie['id'], movie_update)
     return False
 
-def add_special_tags(api: RadarrAPI, movie: Dict, tag_map: Dict, tag_ids: List[int], config: Dict) -> List[int]:
+def add_special_tags(
+        api: RadarrAPI,
+        movie: Dict,
+        tag_map: Dict,
+        tag_ids: List[int],
+        config: Dict) -> List[int]:
     """Add special tags (motong, 4k) if conditions are met"""
     if not movie.get('movieFileId'):
         return tag_ids
