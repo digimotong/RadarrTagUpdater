@@ -1,130 +1,92 @@
 # Radarr Tag Updater
 
-Automatically updates movie tags in Radarr based on custom format scores and other criteria.
+Automatically updates movie tags in Radarr based on custom format scores, release groups, and quality information.
 
 ## Features
 
 - **Score-based tagging**:
-  - `negative_score` when customFormatScore < 0
-  - `positive_score` when customFormatScore > threshold (default: 100)
-  - `no_score` when score is None or between 0-threshold
+  - `negative_score` (red) when customFormatScore < 0
+  - `positive_score` (green) when customFormatScore > threshold (default: 100)
+  - `no_score` (gray) when score is None or between 0-threshold
 
 - **Release group tagging**:
-  - Adds `motong` tag when release group is "motong"
+  - `motong` (purple) when release group is "motong" (configurable via MOTONG env var)
 
-- **Resolution tagging**:
-  - Adds `4k` tag when resolution is 2160p
+- **Quality tagging**:
+  - `4k` (blue) when resolution is 2160p
 
 ## Containerized Deployment
 
-The application can be run in a Docker container:
+The application is designed to run in Docker with Radarr. Here's a sample compose configuration:
 
-1. Copy `.env.example` to `.env` and edit:
-   ```bash
-   cp .env.example .env
-   nano .env
-   ```
+```yaml
+services:
+  radarr-tagger:
+    image: digimotong/radarr-tagger:latest
+    container_name: radarr-tagger
+    restart: unless-stopped
+    depends_on:
+      - radarr
+    environment:
+      RADARR_URL: http://radarr:7878  # Radarr instance URL
+      RADARR_API_KEY: your-api-key    # Radarr API key (required)
+      LOG_LEVEL: INFO                 # DEBUG, INFO, WARNING, ERROR
+      SCORE_THRESHOLD: 100           # Threshold for positive_score
+      INTERVAL_MINUTES: 20            # Minutes between runs
+      MOTONG: true                    # Enable motong tagging
+```
 
-2. Build and run with Docker Compose:
-   ```bash
-   docker-compose up -d
-   ```
+### Required Environment Variables
 
-3. View logs:
-   ```bash
-   docker logs radarr-tagger
-   ```
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `RADARR_URL` | Radarr instance URL | `http://radarr:7878` |
+| `RADARR_API_KEY` | Radarr API key with write permissions | `your-api-key` |
 
-### Environment Variables
+### Optional Environment Variables
 
-- `RADARR_URL`: Radarr instance URL (required)
-- `RADARR_API_KEY`: Radarr API key (required)
-- `LOG_LEVEL`: Logging level (default: INFO)
-- `OUTPUT_DIR`: Results directory (default: /data/results)
-- `OUTPUT_FORMAT`: Output format (json/csv, default: json)
-- `SCORE_THRESHOLD`: Score threshold for positive_score (default: 100)
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOG_LEVEL` | `INFO` | Logging verbosity (DEBUG, INFO, WARNING, ERROR) |
+| `SCORE_THRESHOLD` | `100` | Score threshold for positive_score tag |
+| `INTERVAL_MINUTES` | `20` | Minutes between automatic runs |
+| `MOTONG` | `false` | Enable motong release group tagging |
+
+## Tag Management
+
+The application automatically creates and manages these tags:
+
+| Tag Name | Color | Trigger Condition |
+|----------|-------|-------------------|
+| negative_score | #ff0000 | customFormatScore < 0 |
+| positive_score | #00ff00 | customFormatScore > threshold |
+| no_score | #808080 | No score or 0 ≤ score ≤ threshold |
+| motong | #800080 | Release group contains "motong" |
+| 4k | #0000ff | Resolution is 2160p |
+
+Tags are created automatically if they don't exist in Radarr.
+
+## Monitoring
+
+View container logs to monitor operation:
+
+```bash
+docker logs radarr-tagger
+```
+
+Example log output:
+```
+2025-04-27 12:00:00 - INFO - Starting Radarr Tag Updater v1.0.0
+2025-04-27 12:00:02 - INFO - Processing 125 movies
+2025-04-27 12:00:05 - DEBUG - Movie: Inception - Score: 150 - Tag: positive_score
+2025-04-27 12:00:05 - DEBUG - Added 4k tag for Inception
+2025-04-27 12:00:10 - INFO - Processing complete. Updated 18/125 movies
+2025-04-27 12:00:10 - INFO - Next run in 20 minutes
+```
 
 ## Requirements
 
-- Python 3.6+ (for direct usage)
-- Docker (for containerized usage)
+- Docker
 - Radarr v3+
 - API key with write permissions
-
-## Direct Installation (Alternative)
-
-1. Clone this repository
-2. Install requirements:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. Copy `config.example.json` to `config.json` and edit:
-   ```json
-   {
-     "radarr_url": "http://your-radarr:7878",
-     "radarr_api_key": "your-api-key",
-     "score_threshold": 100,
-     "log_level": "INFO"
-   }
-   ```
-
-## Usage
-
-### Containerized:
-```bash
-docker-compose up -d
-```
-
-### Direct:
-```bash
-python radarr_tag_updater.py [options]
-```
-
-Options:
-- `--config`: Specify alternate config file (default: config.json)
-- `--test`: Test mode (only processes first 5 movies)
-- `--log-level`: Override log level (DEBUG, INFO, WARNING, ERROR)
-
-## Automation
-
-### Cron Job Setup (Direct Usage)
-
-To run automatically on a schedule:
-
-1. Find your Python path:
-   ```bash
-   which python3
-   ```
-
-2. Edit crontab:
-   ```bash
-   crontab -e
-   ```
-
-3. Add entries like:
-   ```bash
-   # Daily at 2am
-   0 2 * * * /full/path/to/python3 /path/to/radarr_tag_updater.py >> /path/to/radarr_tag_updater.log 2>&1
-   ```
-
-## Tags
-
-The script will automatically create these tags if missing:
-- `negative_score` (red)
-- `positive_score` (green) 
-- `no_score` (gray)
-- `motong` (purple)
-- `4k` (blue)
-
-## Logging
-
-Detailed logs are written to `radarr_tag_updater.log` (direct usage) or container logs (docker usage)
-
-## Example Output
-
-```
-2025-04-10 09:30:00 - INFO - Starting Radarr Tag Updater v1.0.0
-2025-04-10 09:30:02 - DEBUG - Movie: The Matrix - Score: 150 - Tag: positive_score
-2025-04-10 09:30:02 - DEBUG - Added 4k tag for The Matrix
-2025-04-10 09:30:05 - INFO - Processing complete. Updated 42/100 movies
+- Network access to Radarr instance
