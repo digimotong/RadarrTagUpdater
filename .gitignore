@@ -2,11 +2,16 @@
 */
 
 !.gitignore
-!.github
 !README.md
+
+!.github
+!.github/*
+!.github/workflows
+!.github/workflows/*
 
 !.env.example
 !radarr-tagger
 !radarr-tagger/*
 !requirements.txt
 !Dockerfile
+!.pylintrc
