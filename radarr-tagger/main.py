@@ -233,15 +233,26 @@ class RadarrAPI:
             return False
 
 def setup_logging(log_level):
-    """Configure logging for cron job"""
+    """Configure logging with forced flushing"""
+    log_format = '%(asctime)s - %(levelname)s - %(message)s'
+    
+    # Clear any existing handlers
+    logging.root.handlers = []
+    
+    # Set up console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(log_level)
+    console_handler.setFormatter(logging.Formatter(log_format))
+    
+    # Configure root logger
     logging.basicConfig(
         level=log_level,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler('/logs/radarr-tagger.log'),
-            logging.StreamHandler()
-        ]
+        format=log_format,
+        handlers=[console_handler]
     )
+    
+    logging.info("Logging initialized at level: %s", log_level)
+    logging.debug("Debug logging enabled")
 
 if __name__ == "__main__":
     main()
