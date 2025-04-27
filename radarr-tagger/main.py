@@ -264,7 +264,7 @@ def main():
             time.sleep(300)
 
 def setup_logging(log_level):
-    """Configure logging with forced flushing"""
+    """Configure logging"""
     log_format = '%(asctime)s - %(levelname)s - %(message)s'
 
     # Clear any existing handlers
