@@ -156,13 +156,13 @@ def process_movie_tags(api: RadarrAPI, movie: Dict, tag_map: Dict, score_thresho
             logging.warning("Failed to get movie file for %s", movie['title'])
 
     new_tag_name = get_score_tag(score, score_threshold)
-    logging.debug("Movie: %s - Score: %s - Tag: %s", 
+    logging.debug("Movie: %s - Score: %s - Tag: %s",
                 movie['title'], score, new_tag_name)
     new_tag_ids.append(tag_map[new_tag_name])
 
     # Add special tags if needed
     new_tag_ids = add_special_tags(api, movie, tag_map, new_tag_ids)
-    
+
     # Only update if tags changed
     if set(new_tag_ids) != current_tags:
         movie_update['tags'] = new_tag_ids
@@ -179,7 +179,7 @@ def add_special_tags(api: RadarrAPI, movie: Dict, tag_map: Dict, tag_ids: List[i
         if movie_file.get('releaseGroup', '').lower() == 'motong':
             tag_ids.append(tag_map['motong'])
             logging.debug("Added motong tag for %s", movie['title'])
-        
+
         quality = movie_file.get('quality', {})
         if quality.get('quality', {}).get('resolution') == 2160:
             tag_ids.append(tag_map['4k'])
@@ -235,7 +235,7 @@ def main():
                 logging.info("TEST MODE: Processing first 5 movies only")
 
             updated_count = sum(
-                1 for movie in movies 
+                1 for movie in movies
                 if process_movie_tags(api, movie, tag_map, config['score_threshold'])
             )
 
