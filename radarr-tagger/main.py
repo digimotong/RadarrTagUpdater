@@ -6,7 +6,7 @@ Fetches movies from Radarr API and updates tags.
 
 import os
 import sys
-import json
+import argparse
 import logging
 import time
 from typing import Dict, List
@@ -15,7 +15,6 @@ from requests.exceptions import RequestException
 
 def parse_args():
     """Parse command line arguments"""
-    import argparse
     parser = argparse.ArgumentParser(description='Radarr Tag Updater')
     parser.add_argument('--test', action='store_true',
                       help='Run in test mode (only process first 5 movies)')
@@ -63,20 +62,20 @@ def main():
     config = get_config_from_env()
     
     # Set global config
-    RADARR_URL = config['radarr_url']
-    RADARR_API_KEY = config['radarr_api_key']
-    LOG_LEVEL = config['log_level']
-    SCORE_THRESHOLD = config['score_threshold']
-    INTERVAL_MINUTES = int(os.getenv('INTERVAL_MINUTES', '20'))
+    radarr_url = config['radarr_url']
+    radarr_api_key = config['radarr_api_key']
+    log_level = config['log_level']
+    score_threshold = config['score_threshold']
+    interval_minutes = int(os.getenv('INTERVAL_MINUTES', '20'))
 
-    setup_logging(LOG_LEVEL)
+    setup_logging(log_level)
     logging.info("Starting Radarr Tag Updater v%s", VERSION)
-    logging.info("Running every %d minutes", INTERVAL_MINUTES)
+    logging.info("Running every %d minutes", interval_minutes)
     
     while True:
         try:
             # Initialize API client
-            api = RadarrAPI(RADARR_URL, RADARR_API_KEY)
+            api = RadarrAPI(radarr_url, radarr_api_key)
             
             # Fetch required data
             movies = api.get_movies()
@@ -95,7 +94,7 @@ def main():
             }
             for tag, color in score_tags.items():
                 if tag not in tag_map:
-                    logging.info(f"Creating missing tag: {tag}")
+                    logging.info("Creating missing tag: %s", tag)
                     new_tag = api.create_tag(tag, color)
                     tag_map[tag] = new_tag['id']
             
@@ -123,10 +122,11 @@ def main():
                         movie_file = api.get_movie_file(movie['movieFileId'])
                         score = movie_file.get('customFormatScore')
                     except RequestException:
-                        logging.warning(f"Failed to get movie file for {movie['title']}")
+                        logging.warning("Failed to get movie file for %s", movie['title'])
                 
-                new_tag_name = get_score_tag(score, SCORE_THRESHOLD)
-                logging.debug(f"Movie: {movie['title']} - Score: {score} - Tag: {new_tag_name}")
+                new_tag_name = get_score_tag(score, score_threshold)
+                logging.debug("Movie: %s - Score: %s - Tag: %s", 
+                            movie['title'], score, new_tag_name)
                 new_tag_ids.append(tag_map[new_tag_name])
                 
                 # Add motong tag if release group matches
@@ -135,13 +135,13 @@ def main():
                         movie_file = api.get_movie_file(movie['movieFileId'])
                         if movie_file.get('releaseGroup', '').lower() == 'motong':
                             new_tag_ids.append(tag_map['motong'])
-                            logging.debug(f"Added motong tag for {movie['title']}")
+                            logging.debug("Added motong tag for %s", movie['title'])
                         
                         # Add 4k tag if resolution is 2160p
                         quality = movie_file.get('quality', {})
                         if quality.get('quality', {}).get('resolution') == 2160:
                             new_tag_ids.append(tag_map['4k'])
-                            logging.debug(f"Added 4k tag for {movie['title']}")
+                            logging.debug("Added 4k tag for %s", movie['title'])
                     except RequestException:
                         pass  # Already logged earlier
                 
@@ -151,14 +151,14 @@ def main():
                     success = api.update_movie(movie['id'], movie_update)
                     if success:
                         updated_count += 1
-                        logging.debug(f"Updated tags for {movie['title']}")
+                        logging.debug("Updated tags for %s", movie['title'])
 
-            logging.info(f"Processing complete. Updated {updated_count}/{len(movies)} movies")
-            logging.info(f"Next run in {INTERVAL_MINUTES} minutes")
-            time.sleep(INTERVAL_MINUTES * 60)
+            logging.info("Processing complete. Updated %s/%s movies", updated_count, len(movies))
+            logging.info("Next run in %s minutes", interval_minutes)
+            time.sleep(interval_minutes * 60)
             
-        except Exception as e:
-            logging.error(f"Script failed: {str(e)}")
+        except (RequestException, ValueError) as e:
+            logging.error("Script failed: %s", str(e))
             logging.info("Retrying in 5 minutes")
             time.sleep(300)  # Retry after 5 minutes on error
 
@@ -182,7 +182,7 @@ class RadarrAPI:
             response.raise_for_status()
             return response.json()
         except RequestException as e:
-            logging.error(f"Failed to fetch movies: {str(e)}")
+            logging.error("Failed to fetch movies: %s", str(e))
             raise
 
     def get_tags(self) -> List[Dict]:
@@ -193,7 +193,7 @@ class RadarrAPI:
             response.raise_for_status()
             return response.json()
         except RequestException as e:
-            logging.error(f"Failed to fetch tags: {str(e)}")
+            logging.error("Failed to fetch tags: %s", str(e))
             raise
 
     def create_tag(self, label: str, color: str = "#808080") -> Dict:
@@ -207,7 +207,7 @@ class RadarrAPI:
             response.raise_for_status()
             return response.json()
         except RequestException as e:
-            logging.error(f"Failed to create tag '{label}': {str(e)}")
+            logging.error("Failed to create tag '%s': %s", label, str(e))
             raise
 
     def get_movie_file(self, movie_file_id: int) -> Dict:
@@ -218,7 +218,7 @@ class RadarrAPI:
             response.raise_for_status()
             return response.json()
         except RequestException as e:
-            logging.error(f"Failed to fetch movie file {movie_file_id}: {str(e)}")
+            logging.error("Failed to fetch movie file %s: %s", movie_file_id, str(e))
             raise
 
     def update_movie(self, movie_id: int, movie_data: Dict) -> bool:
@@ -229,7 +229,10 @@ class RadarrAPI:
             response.raise_for_status()
             return True
         except RequestException as e:
-            logging.error(f"Failed to update movie {movie_id}. Response: {response.text if 'response' in locals() else ''}. Error: {str(e)}")
+            logging.error("Failed to update movie %s. Response: %s. Error: %s", 
+                        movie_id, 
+                        response.text if 'response' in locals() else '', 
+                        str(e))
             return False
 
 def setup_logging(log_level):
