@@ -156,8 +156,11 @@ def process_movie_tags(api: RadarrAPI, movie: Dict, tag_map: Dict, score_thresho
             logging.warning("Failed to get movie file for %s", movie['title'])
 
     new_tag_name = get_score_tag(score, score_threshold)
-    logging.debug("Movie: %s - Score: %s - Tag: %s",
-                movie['title'], score, new_tag_name)
+    logging.debug(
+        "Movie: %s - Score: %s - Tag: %s",
+        movie['title'],
+        score,
+        new_tag_name)
     new_tag_ids.append(tag_map[new_tag_name])
 
     # Add special tags if needed
