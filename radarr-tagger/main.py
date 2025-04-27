@@ -15,11 +15,16 @@ from requests.exceptions import RequestException
 
 def parse_args():
     """Parse command line arguments"""
-    parser = argparse.ArgumentParser(description='Radarr Tag Updater')
-    parser.add_argument('--test', action='store_true',
-                      help='Run in test mode (only process first 5 movies)')
-    parser.add_argument('--version', action='store_true',
-                      help='Show version and exit')
+    parser = argparse.ArgumentParser(
+        description='Radarr Tag Updater')
+    parser.add_argument(
+        '--test', 
+        action='store_true',
+        help='Run in test mode (only process first 5 movies)')
+    parser.add_argument(
+        '--version', 
+        action='store_true',
+        help='Show version and exit')
     return parser.parse_args()
 
 def get_config_from_env():
@@ -28,7 +33,8 @@ def get_config_from_env():
         'radarr_url': os.environ['RADARR_URL'],
         'radarr_api_key': os.environ['RADARR_API_KEY'],
         'log_level': os.getenv('LOG_LEVEL', 'INFO'),
-        'score_threshold': int(os.getenv('SCORE_THRESHOLD', '100'))
+        'score_threshold': int(
+            os.getenv('SCORE_THRESHOLD', '100'))
     }
 
     # Validate required fields
@@ -48,9 +54,10 @@ def get_score_tag(score: int, threshold: int) -> str:
         return "positive_score"
     return "no_score"
 
+
 VERSION = "1.0.0"
 
-def process_movie_tags(api: RadarrAPI, movie: Dict, tag_map: Dict, score_tags: Dict, score_threshold: int) -> bool:
+def process_movie_tags(api: RadarrAPI, movie: Dict, tag_map: Dict, score_threshold: int) -> bool:
     """Process and update tags for a single movie"""
     movie_update = movie.copy()
     current_tags = set(movie.get('tags', []))
@@ -148,15 +155,22 @@ def main():
                 movies = movies[:5]
                 logging.info("TEST MODE: Processing first 5 movies only")
 
+            score_tags = {
+                'negative_score': '#ff0000',
+                'positive_score': '#00ff00',
+                'no_score': '#808080',
+                'motong': '#800080',
+                '4k': '#0000ff'
+            }
             updated_count = sum(
                 1 for movie in movies 
-                if process_movie_tags(api, movie, tag_map, score_tags, config['score_threshold'])
+                if process_movie_tags(api, movie, tag_map, config['score_threshold'])
             )
 
             logging.info("Processing complete. Updated %s/%s movies", updated_count, len(movies))
             logging.info("Next run in %s minutes", interval_minutes)
             time.sleep(interval_minutes * 60)
-            
+
         except (RequestException, ValueError) as e:
             logging.error("Script failed: %s", str(e))
             logging.info("Retrying in 5 minutes")
@@ -238,22 +252,22 @@ class RadarrAPI:
 def setup_logging(log_level):
     """Configure logging with forced flushing"""
     log_format = '%(asctime)s - %(levelname)s - %(message)s'
-    
+
     # Clear any existing handlers
     logging.root.handlers = []
-    
+
     # Set up console handler
     console_handler = logging.StreamHandler()
     console_handler.setLevel(log_level)
     console_handler.setFormatter(logging.Formatter(log_format))
-    
+
     # Configure root logger
     logging.basicConfig(
         level=log_level,
         format=log_format,
         handlers=[console_handler]
     )
-    
+
     logging.info("Logging initialized at level: %s", log_level)
     logging.debug("Debug logging enabled")
 
