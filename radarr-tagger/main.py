@@ -80,10 +80,11 @@ class RadarrAPI:
             response.raise_for_status()
             return True
         except RequestException as e:
-            logging.error("Failed to update movie %s. Response: %s. Error: %s", 
-                        movie_id, 
-                        response.text if 'response' in locals() else '', 
-                        str(e))
+            logging.error(
+                "Failed to update movie %s. Response: %s. Error: %s",
+                movie_id,
+                response.text if 'response' in locals() else '',
+                str(e))
             return False
 
 def parse_args():
@@ -91,11 +92,11 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description='Radarr Tag Updater')
     parser.add_argument(
-        '--test', 
+        '--test',
         action='store_true',
         help='Run in test mode (only process first 5 movies)')
     parser.add_argument(
-        '--version', 
+        '--version',
         action='store_true',
         help='Show version and exit')
     return parser.parse_args()
