@@ -107,7 +107,8 @@ def get_config_from_env():
         'radarr_url': os.environ['RADARR_URL'],
         'radarr_api_key': os.environ['RADARR_API_KEY'],
         'log_level': os.getenv('LOG_LEVEL', 'INFO'),
-        'score_threshold': int(os.getenv('SCORE_THRESHOLD', '100'))
+        'score_threshold': int(os.getenv('SCORE_THRESHOLD', '100')),
+        'motong_enabled': os.getenv('MOTONG', 'false').lower() == 'true'
     }
 
     # Validate required fields
@@ -130,7 +131,7 @@ def get_score_tag(score: int, threshold: int) -> str:
 
 VERSION = "1.0.0"
 
-def process_movie_tags(api: RadarrAPI, movie: Dict, tag_map: Dict, score_threshold: int) -> bool:
+def process_movie_tags(api: RadarrAPI, movie: Dict, tag_map: Dict, score_threshold: int, config: Dict) -> bool:
     """Process and update tags for a single movie"""
     movie_update = movie.copy()
     current_tags = set(movie.get('tags', []))
@@ -165,7 +166,7 @@ def process_movie_tags(api: RadarrAPI, movie: Dict, tag_map: Dict, score_thresho
     new_tag_ids.append(tag_map[new_tag_name])
 
     # Add special tags if needed
-    new_tag_ids = add_special_tags(api, movie, tag_map, new_tag_ids)
+    new_tag_ids = add_special_tags(api, movie, tag_map, new_tag_ids, config)
 
     # Only update if tags changed
     if set(new_tag_ids) != current_tags:
@@ -173,14 +174,14 @@ def process_movie_tags(api: RadarrAPI, movie: Dict, tag_map: Dict, score_thresho
         return api.update_movie(movie['id'], movie_update)
     return False
 
-def add_special_tags(api: RadarrAPI, movie: Dict, tag_map: Dict, tag_ids: List[int]) -> List[int]:
+def add_special_tags(api: RadarrAPI, movie: Dict, tag_map: Dict, tag_ids: List[int], config: Dict) -> List[int]:
     """Add special tags (motong, 4k) if conditions are met"""
     if not movie.get('movieFileId'):
         return tag_ids
 
     try:
         movie_file = api.get_movie_file(movie['movieFileId'])
-        if movie_file.get('releaseGroup', '').lower() == 'motong':
+        if config['motong_enabled'] and movie_file.get('releaseGroup', '').lower() == 'motong':
             tag_ids.append(tag_map['motong'])
             logging.debug("Added motong tag for %s", movie['title'])
 
@@ -240,7 +241,7 @@ def main():
 
             updated_count = sum(
                 1 for movie in movies
-                if process_movie_tags(api, movie, tag_map, config['score_threshold'])
+                if process_movie_tags(api, movie, tag_map, config['score_threshold'], config)
             )
 
             logging.info("Processing complete. Updated %s/%s movies", updated_count, len(movies))
