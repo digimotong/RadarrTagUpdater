@@ -108,7 +108,8 @@ def get_config_from_env():
         'radarr_api_key': os.environ['RADARR_API_KEY'],
         'log_level': os.getenv('LOG_LEVEL', 'INFO'),
         'score_threshold': int(os.getenv('SCORE_THRESHOLD', '100')),
-        'motong_enabled': os.getenv('MOTONG', 'false').lower() == 'true'
+        'tag_motong_enabled': os.getenv('TAG_MOTONG', 'false').lower() == 'true',
+        'tag_4k_enabled': os.getenv('TAG_4K', 'false').lower() == 'true'
     }
 
     # Validate required fields
@@ -191,12 +192,12 @@ def add_special_tags(
 
     try:
         movie_file = api.get_movie_file(movie['movieFileId'])
-        if config['motong_enabled'] and movie_file.get('releaseGroup', '').lower() == 'motong':
+        if config['tag_motong_enabled'] and movie_file.get('releaseGroup', '').lower() == 'motong':
             tag_ids.append(tag_map['motong'])
             logging.debug("Added motong tag for %s", movie['title'])
 
         quality = movie_file.get('quality', {})
-        if quality.get('quality', {}).get('resolution') == 2160:
+        if config['tag_4k_enabled'] and quality.get('quality', {}).get('resolution') == 2160:
             tag_ids.append(tag_map['4k'])
             logging.debug("Added 4k tag for %s", movie['title'])
     except RequestException:
